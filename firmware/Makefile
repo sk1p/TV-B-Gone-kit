@@ -94,7 +94,7 @@ LDFLAGS += -lm
 AVRDUDE_PROGRAMMER = usbtiny
 #AVRDUDE_PROGRAMMER = stk500v2
 
-AVRDUDE_PORT = com3        # programmer connected to serial device
+AVRDUDE_PORT = usb:001:018        # programmer connected to serial device
 
 AVRDUDE_WRITE_FLASH = -B 1 -U flash:w:$(TARGET).hex
 #AVRDUDE_WRITE_EEPROM = -U eeprom:w:$(TARGET).eep

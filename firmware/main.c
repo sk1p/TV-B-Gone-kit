@@ -78,11 +78,6 @@ The hardware for this project is very simple:
 
 
 
-extern const PGM_P * const NApowerCodes[] PROGMEM;
-extern const PGM_P * const EUpowerCodes[] PROGMEM;
-extern const uint8_t num_NAcodes, num_EUcodes;
-
-
 /* This function is the 'workhorse' of transmitting IR codes.
    Given the on and off times, it turns on the PWM output on and off
    to generate one 'pair' from a long code. Each code has ~50 pairs! */
@@ -131,31 +126,6 @@ uint8_t bitsleft_r = 0;
 uint8_t bits_r=0;
 PGM_P code_ptr;
 
-// we cant read more than 8 bits at a time so dont try!
-uint8_t read_bits(uint8_t count)
-{
-  uint8_t i;
-  uint8_t tmp=0;
-  
-  // we need to read back count bytes
-  for (i=0; i<count; i++) {
-    // check if the 8-bit buffer we have has run out
-    if (bitsleft_r == 0) {
-      // in which case we read a new byte in
-      bits_r = pgm_read_byte(code_ptr++);
-      // and reset the buffer size (8 bites in a byte)
-      bitsleft_r = 8;
-    }
-    // remove one bit
-    bitsleft_r--;
-    // and shift it off of the end of 'bits_r'
-    tmp |= (((bits_r >> (bitsleft_r)) & 1) << (count-1-i));
-  }
-  // return the selected bits in the LSB part of tmp
-  return tmp; 
-}
-
-
 /*
 The C compiler creates code that will transfer all constants into RAM when 
 the microcontroller resets.  Since this firmware has a table (powerCodes) 
@@ -186,9 +156,7 @@ that index into another table in ROM that actually stores the on/off times
 
 
 int main(void) {
-  uint16_t ontime, offtime;
   uint8_t i,j, Loop;
-  uint8_t region = US;     // by default our code is US
   
   Loop = 0;                // by default we are not going to loop
 
@@ -216,16 +184,6 @@ int main(void) {
 
   delay_ten_us(5000);            // Let everything settle for a bit
 
-  // determine region
-  if (PINB & _BV(REGIONSWITCH)) {
-    region = US; // US
-  } else {
-    region = EU;
-  }
-
-  // Tell the user what region we're in  - 3 is US 4 is EU
-  quickflashLEDx(3+region);
-  
   // Starting execution loop
   delay_ten_us(25000);
   
@@ -234,78 +192,19 @@ int main(void) {
   wdt_enable(WDTO_8S); // 1 second long timeout
 
   do {	//Execute the code at least once.  If Loop is on, execute forever.
-
-    // We may have different number of codes in either database
-    if (region == US) {
-      j = num_NAcodes;
-    } else {
-      j = num_EUcodes;
-    }
-
-    // for every POWER code in our collection
-    for(i=0 ; i < j; i++) {   
       //To keep Watchdog from resetting in middle of code.
       wdt_reset();
 
-      // point to next POWER code, from the right database
-      if (region == US) {
-	code_ptr = (PGM_P)pgm_read_word(NApowerCodes+i);  
-      } else {
-	code_ptr = (PGM_P)pgm_read_word(EUpowerCodes+i);  
-      }
-
-      // Read the carrier frequency from the first byte of code structure
-      const uint8_t freq = pgm_read_byte(code_ptr++);
       // set OCR for Timer1 to output this POWER code's carrier frequency
-      OCR0A = freq; 
-      
-      // Get the number of pairs, the second byte from the code struct
-      const uint8_t numpairs = pgm_read_byte(code_ptr++);
+      // XXX we need to set the carrier frequency to 32700 Hz, I think
+      OCR0A = freq_to_timerval(32700);
 
-      // Get the number of bits we use to index into the timer table
-      // This is the third byte of the structure
-      const uint8_t bitcompression = pgm_read_byte(code_ptr++);
-
-      // Get pointer (address in memory) to pulse-times table
-      // The address is 16-bits (2 byte, 1 word)
-      const PGM_P time_ptr = (PGM_P)pgm_read_word(code_ptr);
-      code_ptr+=2;
-
-      // Transmit all codeElements for this POWER code 
-      // (a codeElement is an onTime and an offTime)
-      // transmitting onTime means pulsing the IR emitters at the carrier 
-      // frequency for the length of time specified in onTime
-      // transmitting offTime means no output from the IR emitters for the 
-      // length of time specified in offTime
-
-      // For EACH pair in this code....
-      for (uint8_t k=0; k<numpairs; k++) {
-	uint8_t ti;
-	
-	// Read the next 'n' bits as indicated by the compression variable
-	// The multiply by 4 because there are 2 timing numbers per pair
-	// and each timing number is one word long, so 4 bytes total!
-	ti = (read_bits(bitcompression)) * 4;
-
-	// read the onTime and offTime from the program memory
-	ontime = pgm_read_word(time_ptr+ti);  // read word 1 - ontime
-	offtime = pgm_read_word(time_ptr+ti+2);  // read word 2 - offtime
-
-	// transmit this codeElement (ontime and offtime)
-	xmitCodeElement(ontime, offtime, (freq!=0));  
-      } 
-      
-      //Flush remaining bits, so that next code starts
-      //with a fresh set of 8 bits.
-      bitsleft_r=0;	
-
-      // delay 250 milliseconds before transmitting next POWER code
-      delay_ten_us(25000);
-      
-      // visible indication that a code has been output.
-      quickflashLED(); 
-    }
-  } while (Loop == 1);
+      // XXX change 733 to 536 to change mode?
+      // XXX emit burst...
+      xmitCodeElement(45, 733, 1);
+      // XXX emit second burst
+      xmitCodeElement(45, 733, 1);
+  } while (0);
   
   // We are done, no need for a watchdog timer anymore
   wdt_disable();
@@ -396,3 +295,5 @@ void flashslowLEDx( uint8_t num_blinks )
       wdt_reset();                 // kick the dog
     }
 }
+
+// vim:ts=8:sw=8
