@@ -156,10 +156,8 @@ that index into another table in ROM that actually stores the on/off times
 
 
 int main(void) {
-  uint8_t i,j, Loop;
+  uint8_t i;
   
-  Loop = 0;                // by default we are not going to loop
-
   TCCR1 = 0;		   // Turn off PWM/freq gen, should be off already
   TCCR0A = 0;
   TCCR0B = 0;
@@ -191,20 +189,17 @@ int main(void) {
   // a 'stuck' system by resetting it
   wdt_enable(WDTO_8S); // 1 second long timeout
 
-  do {	//Execute the code at least once.  If Loop is on, execute forever.
-      //To keep Watchdog from resetting in middle of code.
-      wdt_reset();
+  wdt_reset();
 
-      // set OCR for Timer1 to output this POWER code's carrier frequency
-      // XXX we need to set the carrier frequency to 32700 Hz, I think
-      OCR0A = freq_to_timerval(32700);
+  // set OCR for Timer1 to output this POWER code's carrier frequency
+  // XXX we need to set the carrier frequency to 32700 Hz, I think
+  OCR0A = freq_to_timerval(32700);
 
-      // XXX change 733 to 536 to change mode?
-      // XXX emit burst...
-      xmitCodeElement(45, 733, 1);
-      // XXX emit second burst
-      xmitCodeElement(45, 733, 1);
-  } while (0);
+  // XXX change 733 to 536 to change mode?
+  // XXX emit burst...
+  xmitCodeElement(45, 733, 1);
+  // XXX emit second burst
+  xmitCodeElement(45, 733, 1);
   
   // We are done, no need for a watchdog timer anymore
   wdt_disable();
